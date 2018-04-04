@@ -85,22 +85,8 @@ class DNC(nn.Module):
                                  self.output_size, bias=self.bias, batch_first=True, dropout=self.dropout, num_layers=self.num_hidden_layers))
       setattr(self, self.rnn_type.lower() + '_layer_' + str(layer), self.rnns[layer])
 
-      # memories for each layer
-      if not self.share_memory:
-        self.memories.append(
-            Memory(
-                input_size=self.output_size,
-                mem_size=self.nr_cells,
-                cell_size=self.w,
-                read_heads=self.r,
-                gpu_id=self.gpu_id,
-                independent_linears=self.independent_linears
-            )
-        )
-        setattr(self, 'rnn_layer_memory_' + str(layer), self.memories[layer])
-
-    # only one memory shared by all layers
     if self.share_memory:
+      # only one memory shared by all layers
       self.memories.append(
           Memory(
               input_size=self.output_size,
@@ -112,6 +98,20 @@ class DNC(nn.Module):
           )
       )
       setattr(self, 'rnn_layer_memory_shared', self.memories[0])
+    else:
+      for layer in range(self.num_layers):
+        # memories for each layer
+        self.memories.append(
+            Memory(
+                input_size=self.output_size,
+                mem_size=self.nr_cells,
+                cell_size=self.w,
+                read_heads=self.r,
+                gpu_id=self.gpu_id,
+                independent_linears=self.independent_linears
+            )
+        )
+        setattr(self, 'rnn_layer_memory_' + str(layer), self.memories[layer])
 
     # final output layer
     self.output = nn.Linear(self.nn_output_size, self.input_size)

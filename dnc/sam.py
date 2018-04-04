@@ -67,25 +67,8 @@ class SAM(DNC):
     # override SDNC memories with SAM
     self.memories = []
 
-    for layer in range(self.num_layers):
-      # memories for each layer
-      if not self.share_memory:
-        self.memories.append(
-            SparseMemory(
-                input_size=self.output_size,
-                mem_size=self.nr_cells,
-                cell_size=self.w,
-                sparse_reads=self.sparse_reads,
-                read_heads=self.read_heads,
-                gpu_id=self.gpu_id,
-                mem_gpu_id=self.gpu_id,
-                independent_linears=self.independent_linears
-            )
-        )
-        setattr(self, 'rnn_layer_memory_' + str(layer), self.memories[layer])
-
-    # only one memory shared by all layers
     if self.share_memory:
+      # only one memory shared by all layers
       self.memories.append(
           SparseMemory(
               input_size=self.output_size,
@@ -99,6 +82,22 @@ class SAM(DNC):
           )
       )
       setattr(self, 'rnn_layer_memory_shared', self.memories[0])
+    else:
+      for layer in range(self.num_layers):
+        # memories for each layer
+        self.memories.append(
+            SparseMemory(
+                input_size=self.output_size,
+                mem_size=self.nr_cells,
+                cell_size=self.w,
+                sparse_reads=self.sparse_reads,
+                read_heads=self.read_heads,
+                gpu_id=self.gpu_id,
+                mem_gpu_id=self.gpu_id,
+                independent_linears=self.independent_linears
+            )
+        )
+        setattr(self, 'rnn_layer_memory_' + str(layer), self.memories[layer])
 
   def _debug(self, mhx, debug_obj):
     if not debug_obj:
