@@ -66,25 +66,7 @@ class SDNC(DNC):
     self.temporal_reads = temporal_reads
 
     self.memories = []
-
-    for layer in range(self.num_layers):
-      # memories for each layer
-      if not self.share_memory:
-        self.memories.append(
-            SparseTemporalMemory(
-                input_size=self.output_size,
-                mem_size=self.nr_cells,
-                cell_size=self.w,
-                sparse_reads=self.sparse_reads,
-                read_heads=self.read_heads,
-                temporal_reads=self.temporal_reads,
-                gpu_id=self.gpu_id,
-                mem_gpu_id=self.gpu_id,
-                independent_linears=self.independent_linears
-            )
-        )
-        setattr(self, 'rnn_layer_memory_' + str(layer), self.memories[layer])
-
+    
     # only one memory shared by all layers
     if self.share_memory:
       self.memories.append(
@@ -101,6 +83,23 @@ class SDNC(DNC):
           )
       )
       setattr(self, 'rnn_layer_memory_shared', self.memories[0])
+    else:
+      for layer in range(self.num_layers):
+        # memories for each layer
+        self.memories.append(
+            SparseTemporalMemory(
+                input_size=self.output_size,
+                mem_size=self.nr_cells,
+                cell_size=self.w,
+                sparse_reads=self.sparse_reads,
+                read_heads=self.read_heads,
+                temporal_reads=self.temporal_reads,
+                gpu_id=self.gpu_id,
+                mem_gpu_id=self.gpu_id,
+                independent_linears=self.independent_linears
+            )
+        )
+        setattr(self, 'rnn_layer_memory_' + str(layer), self.memories[layer])
 
   def _debug(self, mhx, debug_obj):
     if not debug_obj:
