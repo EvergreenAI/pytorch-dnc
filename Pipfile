@@ -12,6 +12,7 @@ pytest = "*"
 "b6cfd29" = {file = "http://download.pytorch.org/whl/cpu/torch-0.3.1-cp36-cp36m-linux_x86_64.whl"}
 torchvision = "*"
 ipykernel = "*"
+visdom = "*"
 
 [requires]
 python_version = "3.6"
