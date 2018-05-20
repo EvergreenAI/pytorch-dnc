@@ -363,7 +363,7 @@ if __name__ == '__main__':
     llprint("\nIteration %d/%d" % (i, iterations))
     # We test now the learned generalization using sequence_max_length examples
     random_length = np.random.randint(2, sequence_max_length * 10 + 1)
-    input_data, target_output, loss_weights = generate_data(random_length, args.input_size)
+    input_data, target_output, loss_weights = generate_data(batch_size, random_length, args.input_size)
 
     if rnn.debug:
       output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
