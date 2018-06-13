@@ -407,7 +407,7 @@ python -m visdom.server
 Open http://localhost:8097/ on your browser, and execute the copy task:
 
 ```bash
-python -m tasks.copy_task -cuda 0
+python -m tasks.copy_task -visdom -cuda 0
 ```
 
 The visdom dashboard shows memory as a heatmap for batch 0 every `-summarize_freq` iteration:
