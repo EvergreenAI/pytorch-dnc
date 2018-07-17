@@ -48,14 +48,18 @@ parser.add_argument('-sparse_reads', type=int, default=10, help='number of spars
 parser.add_argument('-temporal_reads', type=int, default=2, help='number of temporal reads')
 
 parser.add_argument('-sequence_max_length', type=int, default=4, metavar='N', help='sequence_max_length')
-parser.add_argument('-curriculum_increment', type=int, default=0, metavar='N', help='sequence_max_length incrementor per 1K iterations')
-parser.add_argument('-curriculum_freq', type=int, default=1000, metavar='N', help='sequence_max_length incrementor per 1K iterations')
+parser.add_argument('-curriculum_increment', type=int, default=0, metavar='N', help='sequence_max_length incrementor per 1K episodes')
+parser.add_argument('-curriculum_freq', type=int, default=1000, metavar='N', help='sequence_max_length incrementor per 1K episodes')
 parser.add_argument('-cuda', type=int, default=-1, help='Cuda GPU ID, -1 for CPU')
 
-parser.add_argument('-iterations', type=int, default=100000, metavar='N', help='total number of iteration')
+parser.add_argument('-train_episodes', type=int, default=50000, metavar='N', help='total number of training episodes')
+parser.add_argument('-test_episodes', type=int, default=5000, metavar='N', help='total number of testing episodes')
 parser.add_argument('-summarize_freq', type=int, default=100, metavar='N', help='summarize frequency')
 parser.add_argument('-check_freq', type=int, default=100, metavar='N', help='check point frequency')
 parser.add_argument('-visdom', action='store_true', help='plot memory content on visdom per -summarize_freq steps')
+
+parser.add_argument('-weights', type=str, default=None, help='Load model from these weights at start of script.')
+
 
 args = parser.parse_args()
 print(args)
@@ -109,7 +113,6 @@ if __name__ == '__main__':
 
   batch_size = args.batch_size
   sequence_max_length = args.sequence_max_length
-  iterations = args.iterations
   summarize_freq = args.summarize_freq
   check_freq = args.check_freq
 
@@ -171,6 +174,9 @@ if __name__ == '__main__':
     )
   else:
     raise Exception('Not recognized type of memory')
+    
+  if args.weights:
+    rnn.load_state_dict(T.load(args.weights))
 
   print(rnn)
   # register_nan_checks(rnn)
@@ -194,188 +200,193 @@ if __name__ == '__main__':
     optimizer = optim.Adadelta(rnn.parameters(), lr=args.lr)
 
 
-  (chx, mhx, rv) = (None, None, None)
-  for epoch in range(iterations + 1):
-    llprint("\rIteration {ep}/{tot}".format(ep=epoch, tot=iterations))
-    optimizer.zero_grad()
+  if args.train_episodes > 0:
+    (chx, mhx, rv) = (None, None, None)
+    for episode in range(args.train_episodes + 1):
+      llprint("\rIteration {ep}/{tot}".format(ep=episode + 1, tot=args.train_episodes))
+      optimizer.zero_grad()
 
-    random_length = np.random.randint(1, sequence_max_length + 1)
+      random_length = np.random.randint(1, sequence_max_length + 1)
 
-    input_data, target_output = generate_data(batch_size, random_length, args.input_size, args.cuda)
+      input_data, target_output = generate_data(batch_size, random_length, args.input_size, cuda=args.cuda)
 
-    if rnn.debug:
-      output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
-    else:
-      output, (chx, mhx, rv) = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
+      if rnn.debug:
+        output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
+      else:
+        output, (chx, mhx, rv) = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
 
-    loss = criterion((output), target_output)
+      loss = criterion((output), target_output)
 
-    loss.backward()
+      loss.backward()
 
-    T.nn.utils.clip_grad_norm(rnn.parameters(), args.clip)
-    optimizer.step()
-    loss_value = loss.data[0]
+      T.nn.utils.clip_grad_norm(rnn.parameters(), args.clip)
+      optimizer.step()
+      loss_value = loss.data[0]
 
-    summarize = (epoch % summarize_freq == 0)
-    take_checkpoint = (epoch != 0) and (epoch % check_freq == 0)
-    increment_curriculum = (epoch != 0) and (epoch % args.curriculum_freq == 0)
+      summarize = (episode % summarize_freq == 0)
+      take_checkpoint = (episode != 0) and (episode % check_freq == 0)
+      increment_curriculum = (episode != 0) and (episode % args.curriculum_freq == 0)
 
-    # detach memory from graph
-    mhx = { k : (v.detach() if isinstance(v, var) else v) for k, v in mhx.items() }
+      # detach memory from graph
+      mhx = { k : (v.detach() if isinstance(v, var) else v) for k, v in mhx.items() }
 
-    last_save_losses.append(loss_value)
+      last_save_losses.append(loss_value)
 
-    if summarize:
-      loss = np.mean(last_save_losses)
-      # print(input_data)
-      # print("1111111111111111111111111111111111111111111111")
-      # print(target_output)
-      # print('2222222222222222222222222222222222222222222222')
-      # print(F.relu6(output))
-      llprint("\n\tAvg. Logistic Loss: %.4f\n" % (loss))
-      if np.isnan(loss):
-        raise Exception('nan Loss')
+      if summarize:
+        loss = np.mean(last_save_losses)
+        # print(input_data)
+        # print("1111111111111111111111111111111111111111111111")
+        # print(target_output)
+        # print('2222222222222222222222222222222222222222222222')
+        # print(F.relu6(output))
+        llprint("\n\tAvg. Logistic Loss: %.4f\n" % (loss))
+        if np.isnan(loss):
+          raise Exception('nan Loss')
 
-    if summarize and rnn.debug:
-      loss = np.mean(last_save_losses)
-      # print(input_data)
-      # print("1111111111111111111111111111111111111111111111")
-      # print(target_output)
-      # print('2222222222222222222222222222222222222222222222')
-      # print(F.relu6(output))
-      last_save_losses = []
+      if summarize and rnn.debug:
+        loss = np.mean(last_save_losses)
+        # print(input_data)
+        # print("1111111111111111111111111111111111111111111111")
+        # print(target_output)
+        # print('2222222222222222222222222222222222222222222222')
+        # print(F.relu6(output))
+        last_save_losses = []
 
-      if args.memory_type == 'dnc':
-        viz.heatmap(
-            v['memory'],
-            opts=dict(
-                xtickstep=10,
-                ytickstep=2,
-                title='Memory, t: ' + str(epoch) + ', loss: ' + str(loss),
-                ylabel='layer * time',
-                xlabel='mem_slot * mem_size'
-            )
-        )
-
-      if args.memory_type == 'dnc':
-        viz.heatmap(
-            v['link_matrix'][-1].reshape(args.mem_slot, args.mem_slot),
-            opts=dict(
-                xtickstep=10,
-                ytickstep=2,
-                title='Link Matrix, t: ' + str(epoch) + ', loss: ' + str(loss),
-                ylabel='mem_slot',
-                xlabel='mem_slot'
-            )
-        )
-      elif args.memory_type == 'sdnc':
-        viz.heatmap(
-            v['link_matrix'][-1].reshape(args.mem_slot, -1),
-            opts=dict(
-                xtickstep=10,
-                ytickstep=2,
-                title='Link Matrix, t: ' + str(epoch) + ', loss: ' + str(loss),
-                ylabel='mem_slot',
-                xlabel='mem_slot'
-            )
-        )
-
-        viz.heatmap(
-            v['rev_link_matrix'][-1].reshape(args.mem_slot, -1),
-            opts=dict(
-                xtickstep=10,
-                ytickstep=2,
-                title='Reverse Link Matrix, t: ' + str(epoch) + ', loss: ' + str(loss),
-                ylabel='mem_slot',
-                xlabel='mem_slot'
-            )
-        )
-
-      elif args.memory_type == 'sdnc' or args.memory_type == 'dnc':
-        viz.heatmap(
-            v['precedence'],
-            opts=dict(
-                xtickstep=10,
-                ytickstep=2,
-                title='Precedence, t: ' + str(epoch) + ', loss: ' + str(loss),
-                ylabel='layer * time',
-                xlabel='mem_slot'
-            )
-        )
-
-      if args.memory_type == 'sdnc':
-        viz.heatmap(
-            v['read_positions'],
-            opts=dict(
-                xtickstep=10,
-                ytickstep=2,
-                title='Read Positions, t: ' + str(epoch) + ', loss: ' + str(loss),
-                ylabel='layer * time',
-                xlabel='mem_slot'
-            )
-        )
-
-      viz.heatmap(
-          v['read_weights'],
-          opts=dict(
-              xtickstep=10,
-              ytickstep=2,
-              title='Read Weights, t: ' + str(epoch) + ', loss: ' + str(loss),
-              ylabel='layer * time',
-              xlabel='nr_read_heads * mem_slot'
+        if args.memory_type == 'dnc':
+          viz.heatmap(
+              v['memory'],
+              opts=dict(
+                  xtickstep=10,
+                  ytickstep=2,
+                  title='Memory, t: ' + str(episode) + ', loss: ' + str(loss),
+                  ylabel='layer * time',
+                  xlabel='mem_slot * mem_size'
+              )
           )
-      )
 
-      viz.heatmap(
-          v['write_weights'],
-          opts=dict(
-              xtickstep=10,
-              ytickstep=2,
-              title='Write Weights, t: ' + str(epoch) + ', loss: ' + str(loss),
-              ylabel='layer * time',
-              xlabel='mem_slot'
+        if args.memory_type == 'dnc':
+          viz.heatmap(
+              v['link_matrix'][-1].reshape(args.mem_slot, args.mem_slot),
+              opts=dict(
+                  xtickstep=10,
+                  ytickstep=2,
+                  title='Link Matrix, t: ' + str(episode) + ', loss: ' + str(loss),
+                  ylabel='mem_slot',
+                  xlabel='mem_slot'
+              )
           )
-      )
-
-      viz.heatmap(
-          v['usage_vector'] if args.memory_type == 'dnc' else v['usage'],
-          opts=dict(
-              xtickstep=10,
-              ytickstep=2,
-              title='Usage Vector, t: ' + str(epoch) + ', loss: ' + str(loss),
-              ylabel='layer * time',
-              xlabel='mem_slot'
+        elif args.memory_type == 'sdnc':
+          viz.heatmap(
+              v['link_matrix'][-1].reshape(args.mem_slot, -1),
+              opts=dict(
+                  xtickstep=10,
+                  ytickstep=2,
+                  title='Link Matrix, t: ' + str(episode) + ', loss: ' + str(loss),
+                  ylabel='mem_slot',
+                  xlabel='mem_slot'
+              )
           )
-      )
 
-    if increment_curriculum:
-      sequence_max_length = sequence_max_length + args.curriculum_increment
-      print("Increasing max length to " + str(sequence_max_length))
+          viz.heatmap(
+              v['rev_link_matrix'][-1].reshape(args.mem_slot, -1),
+              opts=dict(
+                  xtickstep=10,
+                  ytickstep=2,
+                  title='Reverse Link Matrix, t: ' + str(episode) + ', loss: ' + str(loss),
+                  ylabel='mem_slot',
+                  xlabel='mem_slot'
+              )
+          )
 
-    if take_checkpoint:
-      llprint("\nSaving Checkpoint ... "),
-      check_ptr = os.path.join(ckpts_dir, 'step_{}.pth'.format(epoch))
-      cur_weights = rnn.state_dict()
-      T.save(cur_weights, check_ptr)
-      llprint("Done!\n")
+        elif args.memory_type == 'sdnc' or args.memory_type == 'dnc':
+          viz.heatmap(
+              v['precedence'],
+              opts=dict(
+                  xtickstep=10,
+                  ytickstep=2,
+                  title='Precedence, t: ' + str(episode) + ', loss: ' + str(loss),
+                  ylabel='layer * time',
+                  xlabel='mem_slot'
+              )
+          )
 
-  for i in range(int((iterations + 1) / 10)):
-    llprint("\nIteration %d/%d" % (i, iterations))
-    # We test now the learned generalization using sequence_max_length examples
-    random_length = np.random.randint(2, sequence_max_length * 10 + 1)
-    input_data, target_output = generate_data(batch_size, random_length, args.input_size)
+        if args.memory_type == 'sdnc':
+          viz.heatmap(
+              v['read_positions'],
+              opts=dict(
+                  xtickstep=10,
+                  ytickstep=2,
+                  title='Read Positions, t: ' + str(episode) + ', loss: ' + str(loss),
+                  ylabel='layer * time',
+                  xlabel='mem_slot'
+              )
+          )
 
-    if rnn.debug:
-      output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
-    else:
-      output, (chx, mhx, rv) = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
+        viz.heatmap(
+            v['read_weights'],
+            opts=dict(
+                xtickstep=10,
+                ytickstep=2,
+                title='Read Weights, t: ' + str(episode) + ', loss: ' + str(loss),
+                ylabel='layer * time',
+                xlabel='nr_read_heads * mem_slot'
+            )
+        )
 
-    output = output[:, -1, :].sum().data.cpu().numpy()[0]
-    target_output = target_output.sum().data.cpu().numpy()
+        viz.heatmap(
+            v['write_weights'],
+            opts=dict(
+                xtickstep=10,
+                ytickstep=2,
+                title='Write Weights, t: ' + str(episode) + ', loss: ' + str(loss),
+                ylabel='layer * time',
+                xlabel='mem_slot'
+            )
+        )
 
-    try:
-      print("\nReal value: ", ' = ' + str(int(target_output[0])))
-      print("Predicted:  ", ' = ' + str(int(output // 1)) + " [" + str(output) + "]")
-    except Exception as e:
-      pass
+        viz.heatmap(
+            v['usage_vector'] if args.memory_type == 'dnc' else v['usage'],
+            opts=dict(
+                xtickstep=10,
+                ytickstep=2,
+                title='Usage Vector, t: ' + str(episode) + ', loss: ' + str(loss),
+                ylabel='layer * time',
+                xlabel='mem_slot'
+            )
+        )
+
+      if increment_curriculum:
+        sequence_max_length = sequence_max_length + args.curriculum_increment
+        print("Increasing max length to " + str(sequence_max_length))
+
+      if take_checkpoint:
+        llprint("\nSaving Checkpoint ... "),
+        check_ptr = os.path.join(ckpts_dir, 'step_{}.pth'.format(episode))
+        cur_weights = rnn.state_dict()
+        T.save(cur_weights, check_ptr)
+        llprint("Done!\n")
+
+  if args.test_episodes > 0:
+    (chx, mhx, rv) = (None, None, None)
+    for episode in range(args.test_episodes + 1):
+      llprint("\nIteration %d/%d" % (episode+1, args.test_episodes))
+      # We test now the learned generalization using sequence_max_length examples
+      random_length = np.random.randint(2, sequence_max_length * 10 + 1)
+      input_data, target_output = generate_data(batch_size, random_length, args.input_size, cuda=args.cuda)
+
+      if rnn.debug:
+        output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
+      else:
+        output, (chx, mhx, rv) = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
+
+      print(output[:, -1, :].sum())
+      output = output[:, -1, :].sum().data.cpu().numpy()[0]
+      target_output = target_output.sum().data.cpu().numpy()
+
+      try:
+        print("\nReal value: ", ' = ' + str(int(target_output[0])))
+        print("Predicted:  ", ' = ' + str(int(output // 1)) + " [" + str(output) + "]")
+      except Exception as e:
+        pass
+
 
