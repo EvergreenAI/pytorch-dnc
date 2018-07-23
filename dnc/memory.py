@@ -11,13 +11,13 @@ from .util import *
 
 class Memory(nn.Module):
 
-  def __init__(self, input_size, mem_size=512, cell_size=32, read_heads=4, gpu_id=-1, independent_linears=True):
+  def __init__(self, input_size, mem_size=512, cell_size=32, read_heads=4, device=torch.device('cpu'), independent_linears=True):
     super(Memory, self).__init__()
 
     self.mem_size = mem_size
     self.cell_size = cell_size
     self.read_heads = read_heads
-    self.gpu_id = gpu_id
+    self.device = device
     self.input_size = input_size
     self.independent_linears = independent_linears
 
@@ -40,7 +40,7 @@ class Memory(nn.Module):
       self.interface_size = (w * r) + (3 * w) + (5 * r) + 3
       self.interface_weights = nn.Linear(self.input_size, self.interface_size)
 
-    self.I = cuda(1 - T.eye(m).unsqueeze(0), gpu_id=self.gpu_id)  # (1 * n * n)
+    self.I = (1 - T.eye(m).unsqueeze(0)).to(self.device)  # (1 * n * n)
 
   def reset(self, batch_size=1, hidden=None, erase=True):
     m = self.mem_size
@@ -50,12 +50,12 @@ class Memory(nn.Module):
 
     if hidden is None:
       return {
-          'memory': cuda(T.zeros(b, m, w).fill_(0), gpu_id=self.gpu_id),
-          'link_matrix': cuda(T.zeros(b, 1, m, m), gpu_id=self.gpu_id),
-          'precedence': cuda(T.zeros(b, 1, m), gpu_id=self.gpu_id),
-          'read_weights': cuda(T.zeros(b, r, m).fill_(0), gpu_id=self.gpu_id),
-          'write_weights': cuda(T.zeros(b, 1, m).fill_(0), gpu_id=self.gpu_id),
-          'usage_vector': cuda(T.zeros(b, m), gpu_id=self.gpu_id)
+          'memory': T.zeros(b, m, w, device=self.device),
+          'link_matrix': T.zeros(b, 1, m, m, device=self.device),
+          'precedence': T.zeros(b, 1, m, device=self.device),
+          'read_weights': T.zeros(b, r, m, device=self.device),
+          'write_weights': T.zeros(b, 1, m, device=self.device),
+          'usage_vector': T.zeros(b, m, device=self.device)
       }
     else:
       hidden['memory'] = hidden['memory'].clone()
