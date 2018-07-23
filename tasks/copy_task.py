@@ -16,13 +16,13 @@ from visdom import Visdom
 sys.path.insert(0, os.path.join('..', '..'))
 
 import torch as T
-from torch.autograd import Variable as var
 import torch.nn.functional as F
 import torch.optim as optim
 
 from torch.nn.utils import clip_grad_norm
 
 from dnc.dnc import DNC
+# from dnc.dnc_onestep import DNC
 from dnc.sdnc import SDNC
 from dnc.sam import SAM
 from dnc.util import *
@@ -96,7 +96,7 @@ def generate_data(batch_size, length, size, cuda=-1):
     input_data = input_data.cuda()
     target_output = target_output.cuda()
 
-  return var(input_data), var(target_output)
+  return input_data, target_output
 
 
 def criterion(predictions, targets):
@@ -104,13 +104,8 @@ def criterion(predictions, targets):
       -1 * F.logsigmoid(predictions) * (targets) - T.log(1 - F.sigmoid(predictions) + 1e-9) * (1 - targets)
   )
 
+
 if __name__ == '__main__':
-
-  dirname = os.path.dirname(__file__)
-  ckpts_dir = os.path.join(dirname, 'checkpoints')
-  if not os.path.isdir(ckpts_dir):
-    os.mkdir(ckpts_dir)
-
   batch_size = args.batch_size
   sequence_max_length = args.sequence_max_length
   summarize_freq = args.summarize_freq
@@ -184,23 +179,26 @@ if __name__ == '__main__':
   if args.cuda != -1:
     rnn = rnn.cuda(args.cuda)
 
-  last_save_losses = []
-
-  if args.optim == 'adam':
-    optimizer = optim.Adam(rnn.parameters(), lr=args.lr, eps=1e-9, betas=[0.9, 0.98]) # 0.0001
-  elif args.optim == 'adamax':
-    optimizer = optim.Adamax(rnn.parameters(), lr=args.lr, eps=1e-9, betas=[0.9, 0.98]) # 0.0001
-  elif args.optim == 'rmsprop':
-    optimizer = optim.RMSprop(rnn.parameters(), lr=args.lr, momentum=0.9, eps=1e-10) # 0.0001
-  elif args.optim == 'sgd':
-    optimizer = optim.SGD(rnn.parameters(), lr=args.lr) # 0.01
-  elif args.optim == 'adagrad':
-    optimizer = optim.Adagrad(rnn.parameters(), lr=args.lr)
-  elif args.optim == 'adadelta':
-    optimizer = optim.Adadelta(rnn.parameters(), lr=args.lr)
-
-
   if args.train_episodes > 0:
+    ckpts_dir = os.path.join(os.path.dirname(__file__), 'checkpoints')
+    if not os.path.isdir(ckpts_dir):
+      os.mkdir(ckpts_dir)
+
+    last_save_losses = []
+
+    if args.optim == 'adam':
+      optimizer = optim.Adam(rnn.parameters(), lr=args.lr, eps=1e-9, betas=[0.9, 0.98]) # 0.0001
+    elif args.optim == 'adamax':
+      optimizer = optim.Adamax(rnn.parameters(), lr=args.lr, eps=1e-9, betas=[0.9, 0.98]) # 0.0001
+    elif args.optim == 'rmsprop':
+      optimizer = optim.RMSprop(rnn.parameters(), lr=args.lr, momentum=0.9, eps=1e-10) # 0.0001
+    elif args.optim == 'sgd':
+      optimizer = optim.SGD(rnn.parameters(), lr=args.lr) # 0.01
+    elif args.optim == 'adagrad':
+      optimizer = optim.Adagrad(rnn.parameters(), lr=args.lr)
+    elif args.optim == 'adadelta':
+      optimizer = optim.Adadelta(rnn.parameters(), lr=args.lr)
+
     (chx, mhx, rv) = (None, None, None)
     for episode in range(args.train_episodes + 1):
       llprint("\rIteration {ep}/{tot}".format(ep=episode + 1, tot=args.train_episodes))
@@ -228,7 +226,7 @@ if __name__ == '__main__':
       increment_curriculum = (episode != 0) and (episode % args.curriculum_freq == 0)
 
       # detach memory from graph
-      mhx = { k : (v.detach() if isinstance(v, var) else v) for k, v in mhx.items() }
+      mhx = { k : v.detach() for k, v in mhx.items() }
 
       last_save_losses.append(loss_value)
 
@@ -379,8 +377,13 @@ if __name__ == '__main__':
       else:
         output, (chx, mhx, rv) = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
 
-      print(output[:, -1, :].sum())
-      output = output[:, -1, :].sum().data.cpu().numpy()[0]
+        # print()
+        # print('target_output')
+        # print(target_output.shape)
+        # print()
+        # print('output')
+        # print(output.shape)
+      output = output[:,-1,:].sum().data.cpu().numpy()
       target_output = target_output.sum().data.cpu().numpy()
 
       try:

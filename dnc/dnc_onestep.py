@@ -3,7 +3,6 @@
 
 import torch.nn as nn
 import torch as T
-from torch.autograd import Variable as var
 import numpy as np
 
 from torch.nn.utils.rnn import pad_packed_sequence as pad

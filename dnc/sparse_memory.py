@@ -3,7 +3,6 @@
 
 import torch.nn as nn
 import torch as T
-from torch.autograd import Variable as var
 import torch.nn.functional as F
 import numpy as np
 import math
@@ -233,7 +232,7 @@ class SparseMemory(nn.Module):
     # add least used mem to read positions
     # TODO: explore possibility of reading co-locations or ranges and such
     (b, r, k) = read_positions.size()
-    read_positions = var(read_positions).squeeze(1).view(b, -1)
+    read_positions = read_positions.squeeze(1).view(b, -1)
 
     # no gradient here
     # temporal reads

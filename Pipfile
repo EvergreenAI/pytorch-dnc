@@ -12,11 +12,7 @@ pytest = "*"
 torchvision = "*"
 ipykernel = "*"
 visdom = "*"
-<<<<<<< HEAD
 "72aec7c" = {file = "http://download.pytorch.org/whl/cu91/torch-0.4.0-cp36-cp36m-linux_x86_64.whl"}
-=======
-torch = "*"
->>>>>>> 3f7c406e2e51f1105bdded23e24a22e0619e64ef
 
 [requires]
 python_version = "3.6"

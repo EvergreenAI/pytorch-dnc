@@ -3,7 +3,6 @@
 
 import torch.nn as nn
 import torch as T
-from torch.autograd import Variable as var
 import torch.nn.functional as F
 import numpy as np
 
@@ -90,7 +89,7 @@ class Memory(nn.Module):
 
     # cumprod with exclusive=True
     # https://discuss.pytorch.org/t/cumprod-exclusive-true-equivalences/2614/8
-    v = var(sorted_usage.data.new(batch_size, 1).fill_(1))
+    v = sorted_usage.data.new(batch_size, 1).fill_(1)
     cat_sorted_usage = T.cat((v, sorted_usage), 1)
     prod_sorted_usage = T.cumprod(cat_sorted_usage, 1)[:, :-1]
 
