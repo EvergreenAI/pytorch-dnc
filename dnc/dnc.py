@@ -32,7 +32,7 @@ class DNC(nn.Module):
       read_heads=2,
       cell_size=10,
       nonlinearity='tanh',
-      gpu_id=-1,
+      device=torch.device('cpu'),
       independent_linears=False,
       share_memory=True,
       debug=False,
@@ -54,7 +54,7 @@ class DNC(nn.Module):
     self.read_heads = read_heads
     self.cell_size = cell_size
     self.nonlinearity = nonlinearity
-    self.gpu_id = gpu_id
+    self.device = device
     self.independent_linears = independent_linears
     self.share_memory = share_memory
     self.debug = debug
@@ -92,7 +92,7 @@ class DNC(nn.Module):
               mem_size=self.nr_cells,
               cell_size=self.w,
               read_heads=self.r,
-              gpu_id=self.gpu_id,
+              device=self.device,
               independent_linears=self.independent_linears
           )
       )
@@ -106,7 +106,7 @@ class DNC(nn.Module):
                 mem_size=self.nr_cells,
                 cell_size=self.w,
                 read_heads=self.r,
-                gpu_id=self.gpu_id,
+                device=device,
                 independent_linears=self.independent_linears
             )
         )
@@ -116,9 +116,8 @@ class DNC(nn.Module):
     self.output = nn.Linear(self.nn_output_size, self.input_size)
     orthogonal(self.output.weight)
 
-    if self.gpu_id != -1:
-      [x.cuda(self.gpu_id) for x in self.rnns]
-      [x.cuda(self.gpu_id) for x in self.memories]
+    [x.to(self.device) for x in self.rnns]
+    [x.to(self.device) for x in self.memories]
 
   def _init_hidden(self, hx, batch_size, reset_experience):
     # create empty hidden states if not provided
@@ -128,14 +127,14 @@ class DNC(nn.Module):
 
     # initialize hidden state of the controller RNN
     if chx is None:
-      h = cuda(T.zeros(self.num_hidden_layers, batch_size, self.output_size), gpu_id=self.gpu_id)
+      h = T.zeros(self.num_hidden_layers, batch_size, self.output_size, device=self.device)
       xavier_uniform(h)
 
       chx = [ (h, h) if self.rnn_type.lower() == 'lstm' else h for x in range(self.num_layers)]
 
     # Last read vectors
     if last_read is None:
-      last_read = cuda(T.zeros(batch_size, self.w * self.r), gpu_id=self.gpu_id)
+      last_read = T.zeros(batch_size, self.w * self.r, device=self.device)
 
     # memory states
     if mhx is None:
@@ -297,8 +296,8 @@ class DNC(nn.Module):
       s += ', cell_size={cell_size}'
     if self.nonlinearity != 'tanh':
       s += ', nonlinearity={nonlinearity}'
-    if self.gpu_id != -1:
-      s += ', gpu_id={gpu_id}'
+    if self.device:
+      s += ', device={device}'
     if self.independent_linears != False:
       s += ', independent_linears={independent_linears}'
     if self.share_memory != True:
