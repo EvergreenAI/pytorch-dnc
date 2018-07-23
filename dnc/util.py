@@ -23,25 +23,25 @@ def recursiveTrace(obj):
     [recursiveTrace(v.grad_fn) for v in obj.saved_variables]
 
 
-def cuda(x, grad=False, gpu_id=-1):
-  if gpu_id == -1:
-    return var(x, requires_grad=grad)
-  else:
-    return var(x.pin_memory(), requires_grad=grad).cuda(gpu_id, async=True)
+# def cuda(x, grad=False, gpu_id=-1):
+#   if gpu_id == -1:
+#     return var(x, requires_grad=grad)
+#   else:
+#     return var(x.pin_memory(), requires_grad=grad).cuda(gpu_id, async=True)
 
 
-def cudavec(x, grad=False, gpu_id=-1):
-  if gpu_id == -1:
-    return var(T.from_numpy(x), requires_grad=grad)
-  else:
-    return var(T.from_numpy(x).pin_memory(), requires_grad=grad).cuda(gpu_id, async=True)
+# def cudavec(x, grad=False, gpu_id=-1):
+#   if gpu_id == -1:
+#     return var(T.from_numpy(x), requires_grad=grad)
+#   else:
+#     return var(T.from_numpy(x).pin_memory(), requires_grad=grad).cuda(gpu_id, async=True)
 
 
-def cudalong(x, grad=False, gpu_id=-1):
-  if gpu_id == -1:
-    return var(T.from_numpy(x.astype(np.long)), requires_grad=grad)
-  else:
-    return var(T.from_numpy(x.astype(np.long)).pin_memory(), requires_grad=grad).cuda(gpu_id, async=True)
+# def cudalong(x, grad=False, gpu_id=-1):
+#   if gpu_id == -1:
+#     return var(T.from_numpy(x.astype(np.long)), requires_grad=grad)
+#   else:
+#     return var(T.from_numpy(x.astype(np.long)).pin_memory(), requires_grad=grad).cuda(gpu_id, async=True)
 
 
 def θ(a, b, dimA=2, dimB=2, normBy=2):
@@ -143,19 +143,19 @@ def ptr(tensor):
     return tensor
 
 # TODO: EWW change this shit
-def ensure_gpu(tensor, gpu_id):
-  if "cuda" in str(type(tensor)) and gpu_id != -1:
-    return tensor.cuda(gpu_id)
-  elif "cuda" in str(type(tensor)):
-    return tensor.cpu()
-  elif "Tensor" in str(type(tensor)) and gpu_id != -1:
-    return tensor.cuda(gpu_id)
-  elif "Tensor" in str(type(tensor)):
-    return tensor
-  elif type(tensor) is np.ndarray:
-    return cudavec(tensor, gpu_id=gpu_id).data
-  else:
-    return tensor
+# def ensure_gpu(tensor, gpu_id):
+#   if "cuda" in str(type(tensor)) and gpu_id != -1:
+#     return tensor.cuda(gpu_id)
+#   elif "cuda" in str(type(tensor)):
+#     return tensor.cpu()
+#   elif "Tensor" in str(type(tensor)) and gpu_id != -1:
+#     return tensor.cuda(gpu_id)
+#   elif "Tensor" in str(type(tensor)):
+#     return tensor
+#   elif type(tensor) is np.ndarray:
+#     return cudavec(tensor, gpu_id=gpu_id).data
+#   else:
+#     return tensor
 
 
 def print_gradient(x, name):
