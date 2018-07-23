@@ -23,15 +23,15 @@ class SparseMemory(nn.Module):
       sparse_reads=4,
       num_lists=None,
       index_checks=32,
-      gpu_id=-1,
-      mem_gpu_id=-1
+      device=torch.device('cpu'),
+      mem_device=torch.device('cpu')
   ):
     super(SparseMemory, self).__init__()
 
     self.mem_size = mem_size
     self.cell_size = cell_size
-    self.gpu_id = gpu_id
-    self.mem_gpu_id = mem_gpu_id
+    self.device = device
+    self.mem_device = mem_device
     self.input_size = input_size
     self.independent_linears = independent_linears
     self.K = sparse_reads if self.mem_size > sparse_reads else self.mem_size
@@ -60,7 +60,7 @@ class SparseMemory(nn.Module):
       self.interface_weights = nn.Linear(self.input_size, self.interface_size)
       T.nn.init.orthogonal(self.interface_weights.weight)
 
-    self.I = cuda(1 - T.eye(self.c).unsqueeze(0), gpu_id=self.gpu_id)  # (1 * n * n)
+    self.I = (1 - T.eye(self.c).unsqueeze(0)).to(self.device)  # (1 * n * n)
     self.δ = 0.005  # minimum usage
     self.timestep = 0
     self.mem_limit_reached = False
@@ -78,14 +78,14 @@ class SparseMemory(nn.Module):
         hidden['indexes'] = \
             [FAISSIndex(cell_size=self.cell_size,
                         nr_cells=self.mem_size, K=self.K, num_lists=self.num_lists,
-                        probes=self.index_checks, gpu_id=self.mem_gpu_id) for x in range(b)]
+                        probes=self.index_checks, device=self.mem_device) for x in range(b)]
       except Exception as e:
         print("\nFalling back to FLANN (CPU). \nFor using faster, GPU based indexes, install FAISS: `conda install faiss-gpu -c pytorch`")
         from .flann_index import FLANNIndex
         hidden['indexes'] = \
             [FLANNIndex(cell_size=self.cell_size,
                         nr_cells=self.mem_size, K=self.K, num_kdtrees=self.num_lists,
-                        probes=self.index_checks, gpu_id=self.mem_gpu_id) for x in range(b)]
+                        probes=self.index_checks, device=self.mem_device) for x in range(b)]
 
     # add existing memory into indexes
     pos = hidden['read_positions'].squeeze().data.cpu().numpy()
@@ -109,14 +109,14 @@ class SparseMemory(nn.Module):
     if hidden is None:
       hidden = {
           # warning can be a huge chunk of contiguous memory
-          'memory': cuda(T.zeros(b, m, w).fill_(δ), gpu_id=self.mem_gpu_id),
-          'visible_memory': cuda(T.zeros(b, c, w).fill_(δ), gpu_id=self.mem_gpu_id),
-          'read_weights': cuda(T.zeros(b, m).fill_(δ), gpu_id=self.gpu_id),
-          'write_weights': cuda(T.zeros(b, m).fill_(δ), gpu_id=self.gpu_id),
-          'read_vectors': cuda(T.zeros(b, r, w).fill_(δ), gpu_id=self.gpu_id),
-          'least_used_mem': cuda(T.zeros(b, 1).fill_(c + 1), gpu_id=self.gpu_id).long(),
-          'usage': cuda(T.zeros(b, m), gpu_id=self.gpu_id),
-          'read_positions': cuda(T.arange(0, c).expand(b, c), gpu_id=self.gpu_id).long()
+          'memory': T.full((b, m, w), δ, device=self.mem_device),
+          'visible_memory': T.full((b, c, w), δ, device=self.mem_device),
+          'read_weights': T.full((b, m), δ, device=self.device),
+          'write_weights': T.full((b, m), δ, device=self.device),
+          'read_vectors': T.full((b, r, w), δ, device=self.device),
+          'least_used_mem': T.full((b, 1), c + 1, device=self.device, dtype='long'),
+          'usage': T.zeros(b, m, device=self.device),
+          'read_positions': T.arange(0, c, device=self.device, dtype='long').expand(b, c)
       }
       hidden = self.rebuild_indexes(hidden, erase=True)
     else:
@@ -138,8 +138,7 @@ class SparseMemory(nn.Module):
         hidden['read_vectors'].data.fill_(δ)
         hidden['least_used_mem'].data.fill_(c + 1)
         hidden['usage'].data.fill_(0)
-        hidden['read_positions'] = cuda(
-            T.arange(0, c).expand(b, c), gpu_id=self.gpu_id).long()
+        hidden['read_positions'] = T.arange(0, c, device=self.device, dtype='long').expand(b, c)
 
     return hidden
 
