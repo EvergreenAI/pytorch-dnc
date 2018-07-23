@@ -50,7 +50,6 @@ parser.add_argument('-temporal_reads', type=int, default=2, help='number of temp
 parser.add_argument('-sequence_max_length', type=int, default=4, metavar='N', help='sequence_max_length')
 parser.add_argument('-curriculum_increment', type=int, default=0, metavar='N', help='sequence_max_length incrementor per 1K episodes')
 parser.add_argument('-curriculum_freq', type=int, default=1000, metavar='N', help='sequence_max_length incrementor per 1K episodes')
-parser.add_argument('-cuda', type=int, default=-1, help='Cuda GPU ID, -1 for CPU')
 
 parser.add_argument('-train_episodes', type=int, default=50000, metavar='N', help='total number of training episodes')
 parser.add_argument('-test_episodes', type=int, default=5000, metavar='N', help='total number of testing episodes')
@@ -67,11 +66,8 @@ print(args)
 viz = Visdom()
 # assert viz.check_connection()
 
-if args.cuda != -1:
-  print('Using CUDA.')
-  T.manual_seed(1111)
-else:
-  print('Using CPU.')
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+T.manual_seed(1111)
 
 
 def llprint(message):
@@ -79,7 +75,7 @@ def llprint(message):
   sys.stdout.flush()
 
 
-def generate_data(batch_size, length, size, cuda=-1):
+def generate_data(batch_size, length, size, device=device):
 
   input_data = np.zeros((batch_size, 2 * length + 1, size), dtype=np.float32)
   target_output = np.zeros((batch_size, 2 * length + 1, size), dtype=np.float32)
@@ -92,9 +88,9 @@ def generate_data(batch_size, length, size, cuda=-1):
 
   input_data = T.from_numpy(input_data)
   target_output = T.from_numpy(target_output)
-  if cuda != -1:
-    input_data = input_data.cuda()
-    target_output = target_output.cuda()
+  
+  input_data = input_data.to(device)
+  target_output = target_output.to(device)
 
   return input_data, target_output
 
@@ -127,7 +123,7 @@ if __name__ == '__main__':
         nr_cells=mem_slot,
         cell_size=mem_size,
         read_heads=read_heads,
-        gpu_id=args.cuda,
+        device=device,
         debug=args.visdom,
         batch_first=True,
         independent_linears=True
@@ -145,7 +141,7 @@ if __name__ == '__main__':
         sparse_reads=args.sparse_reads,
         temporal_reads=args.temporal_reads,
         read_heads=args.read_heads,
-        gpu_id=args.cuda,
+        device=device,
         debug=args.visdom,
         batch_first=True,
         independent_linears=False
@@ -162,7 +158,7 @@ if __name__ == '__main__':
         cell_size=mem_size,
         sparse_reads=args.sparse_reads,
         read_heads=args.read_heads,
-        gpu_id=args.cuda,
+        device=device,
         debug=args.visdom,
         batch_first=True,
         independent_linears=False
@@ -176,8 +172,7 @@ if __name__ == '__main__':
   print(rnn)
   # register_nan_checks(rnn)
 
-  if args.cuda != -1:
-    rnn = rnn.cuda(args.cuda)
+  rnn = rnn.to(device)
 
   if args.train_episodes > 0:
     ckpts_dir = os.path.join(os.path.dirname(__file__), 'checkpoints')
@@ -206,7 +201,7 @@ if __name__ == '__main__':
 
       random_length = np.random.randint(1, sequence_max_length + 1)
 
-      input_data, target_output = generate_data(batch_size, random_length, args.input_size, cuda=args.cuda)
+      input_data, target_output = generate_data(batch_size, random_length, args.input_size)
 
       if rnn.debug:
         output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
@@ -370,7 +365,7 @@ if __name__ == '__main__':
       llprint("\nIteration %d/%d" % (episode+1, args.test_episodes))
       # We test now the learned generalization using sequence_max_length examples
       random_length = np.random.randint(2, sequence_max_length * 10 + 1)
-      input_data, target_output = generate_data(batch_size, random_length, args.input_size, cuda=args.cuda)
+      input_data, target_output = generate_data(batch_size, random_length, args.input_size)
 
       if rnn.debug:
         output, (chx, mhx, rv), v = rnn(input_data, (None, mhx, None), reset_experience=True, pass_through_memory=True)
@@ -383,13 +378,14 @@ if __name__ == '__main__':
         # print()
         # print('output')
         # print(output.shape)
-      output = output[:,-1,:].sum().data.cpu().numpy()
-      target_output = target_output.sum().data.cpu().numpy()
+      output = output[:,-1,:].sum().data.numpy()
+      target_output = target_output.sum().data.numpy()
 
       try:
         print("\nReal value: ", ' = ' + str(int(target_output[0])))
         print("Predicted:  ", ' = ' + str(int(output // 1)) + " [" + str(output) + "]")
       except Exception as e:
         pass
+
 
 
