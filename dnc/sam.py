@@ -3,7 +3,6 @@
 
 import torch.nn as nn
 import torch as T
-from torch.autograd import Variable as var
 import numpy as np
 
 from torch.nn.utils.rnn import pad_packed_sequence as pad
@@ -35,7 +34,7 @@ class SAM(DNC):
       read_heads=4,
       cell_size=10,
       nonlinearity='tanh',
-      gpu_id=-1,
+      device=torch.device('cpu'),
       independent_linears=False,
       share_memory=True,
       debug=False,
@@ -56,7 +55,7 @@ class SAM(DNC):
         read_heads=read_heads,
         cell_size=cell_size,
         nonlinearity=nonlinearity,
-        gpu_id=gpu_id,
+        device=device,
         independent_linears=independent_linears,
         share_memory=share_memory,
         debug=debug,
@@ -76,8 +75,8 @@ class SAM(DNC):
               cell_size=self.w,
               sparse_reads=self.sparse_reads,
               read_heads=self.read_heads,
-              gpu_id=self.gpu_id,
-              mem_gpu_id=self.gpu_id,
+              device=self.device,
+              mem_device=self.device,
               independent_linears=self.independent_linears
           )
       )
@@ -92,8 +91,8 @@ class SAM(DNC):
                 cell_size=self.w,
                 sparse_reads=self.sparse_reads,
                 read_heads=self.read_heads,
-                gpu_id=self.gpu_id,
-                mem_gpu_id=self.gpu_id,
+                device=self.device,
+                mem_device=self.device,
                 independent_linears=self.independent_linears
             )
         )
